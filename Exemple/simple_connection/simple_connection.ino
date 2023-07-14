@@ -8,7 +8,6 @@ Floker broker(
   /*WiFi password*/,
   false, /*Enable secure connection (http or https */
   /*your server ip or domain name*/, 
-  /*your server's port*/, 
   /*your root api path*/, 
   /*your token server access*/,
   /*number of channel you will subscribe*/,
