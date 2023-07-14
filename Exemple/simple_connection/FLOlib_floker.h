@@ -1,16 +1,16 @@
 #include <Arduino.h>
 
-#define DEBUG_FLOKER_LIB true
+#define DEBUG_FLOKER_LIB false
 String FLOKER_DATA;
 
 // Device type detection call associated libraries
 #ifdef ESP8266_ENABLED
-    #include <ESP8266WiFi.h>
-    #include <ESP8266HTTPClient.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
 #endif
 #ifdef ESP32_ENABLED
-    #include <WiFi.h>
-    #include <HTTPClient.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
 #endif
 
 #define HTTPS_REQUEST "https://"
@@ -67,7 +67,7 @@ private:
     {
         this->channels = (channel *)malloc(nb_channels * sizeof(channel));
     }
-    
+
     // Making uri for request
     String make_uri(String topic, String data_to_write = String(""))
     {
@@ -153,10 +153,12 @@ public:
         this->password = password;
         this->request_type = secure_connection ? String(HTTPS_REQUEST) : String(HTTP_REQUEST);
         this->server = server;
-        if(port == 0){
+        if (port == 0)
+        {
             this->port = secure_connection ? HTTPS_PORT : HTTP_PORT;
         }
-        else {
+        else
+        {
             this->port = port;
         }
         this->root_path = root_path;
@@ -166,7 +168,8 @@ public:
     }
 
     // Choose a custom server port
-    void set_port(unsigned short port){
+    void set_port(unsigned short port)
+    {
         this->port = port;
     }
 
@@ -224,7 +227,6 @@ public:
             this->connection_state_topic_path += no_default_device_path + String("/");
         else if (this->device_path != String(""))
             this->connection_state_topic_path += this->device_path + String("/");
-
         this->connection_state_topic_path += this->device_name;
     }
 
@@ -233,7 +235,7 @@ public:
         if (this->is_connected_polling && millis() - this->last_connection_update > this->connection_update_interval)
         {
             this->last_connection_update = millis();
-            this->write(this->connection_state_topic_path, "connected");
+            this->write(this->connection_state_topic_path, "connected", false);
         }
     }
 
@@ -257,7 +259,7 @@ public:
     {
         bool success = false;
         String uri = make_uri(topic_path);
-        
+
         // Opening the connection
         if (DEBUG_FLOKER_LIB)
         {
@@ -307,14 +309,15 @@ public:
     }
 
     // Write a topic
-    void write(String topic_path, String data_to_write)
+    void write(String topic_path, String data_to_write, bool autocomplete_topic = true)
     {
         bool success = false;
         // Patern device path is set
-        if (this->device_path != String(""))
+        if (autocomplete_topic && this->device_path != String(""))
         {
             topic_path = DEFAULT_START_IOT_PATH + this->device_path + topic_path;
         }
+
         String uri = make_uri(topic_path, data_to_write);
 
         while (!success)

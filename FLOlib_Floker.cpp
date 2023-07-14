@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#define DEBUG_FLOKER_LIB true
+#define DEBUG_FLOKER_LIB false
 String FLOKER_DATA;
 
 // Device type detection call associated libraries
@@ -224,7 +224,6 @@ public:
             this->connection_state_topic_path += no_default_device_path + String("/");
         else if (this->device_path != String(""))
             this->connection_state_topic_path += this->device_path + String("/");
-
         this->connection_state_topic_path += this->device_name;
     }
 
@@ -233,7 +232,7 @@ public:
         if (this->is_connected_polling && millis() - this->last_connection_update > this->connection_update_interval)
         {
             this->last_connection_update = millis();
-            this->write(this->connection_state_topic_path, "connected");
+            this->write(this->connection_state_topic_path, "connected", false);
         }
     }
 
@@ -307,14 +306,15 @@ public:
     }
 
     // Write a topic
-    void write(String topic_path, String data_to_write)
+    void write(String topic_path, String data_to_write, bool autocomplete_topic = true)
     {
         bool success = false;
         // Patern device path is set
-        if (this->device_path != String(""))
+        if (autocomplete_topic && this->device_path != String(""))
         {
             topic_path = DEFAULT_START_IOT_PATH + this->device_path + topic_path;
         }
+
         String uri = make_uri(topic_path, data_to_write);
 
         while (!success)
