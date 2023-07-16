@@ -3,14 +3,18 @@
 #define DEBUG_FLOKER_LIB false
 String FLOKER_DATA;
 
+#define FLOLIB_FLOKER_VERSION "2.0.1"
+
 // Device type detection call associated libraries
 #ifdef ESP8266_ENABLED
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
+#define FLOKER_DEVICE_TYPE "esp8266"
 #endif
 #ifdef ESP32_ENABLED
 #include <WiFi.h>
 #include <HTTPClient.h>
+#define FLOKER_DEVICE_TYPE "esp32"
 #endif
 
 #define HTTPS_REQUEST "https://"
@@ -19,12 +23,22 @@ String FLOKER_DATA;
 #define HTTP_PORT 80
 
 #define DEFAULT_START_POLLING_PATH "devices/"
+#define DEFAULT_STATE_POLLING_PATH "/state"
+#define DEFAULT_INTERVAL_POLLING_PATH "/interval"
+#define DEFAULT_TYPE_POLLING_PATH "/type"
+#define DEFAULT_VERSION_POLLING_PATH "/version"
+
 #define DEFAULT_START_IOT_PATH "iot/"
 #define DEFAULT_SERIAL_BAUDRATE 9600
+
+static unsigned long global_connection_update_interval = 10000;
 
 class Floker
 {
 private:
+    // Device
+    String device_type = FLOKER_DEVICE_TYPE;
+
     // WiFi
     const char *ssid;
     const char *password;
@@ -58,14 +72,17 @@ private:
 
     // Is connected polling
     bool is_connected_polling = false;
+    bool static_information_pushed = false;
     unsigned long last_connection_update = 0;
-    unsigned long connection_update_interval = 10000;
     String connection_state_topic_path;
+    String connection_interval_topic_path;
+    String connection_type_topic_path;
+    String connection_version_topic_path;
 
     // Tools
     void alloc_channels_memory(unsigned short nb_channels)
     {
-        this->channels = (channel *)malloc(nb_channels * sizeof(channel));
+        this->channels = (channel *)calloc(nb_channels, sizeof(channel));
     }
 
     // Making uri for request
@@ -107,7 +124,7 @@ private:
             }
 
             int http_code;
-            bool read_success = this->read(&http_code, &FLOKER_DATA, this->channels[k].topic_path);
+            bool read_success = this->read(&http_code, &FLOKER_DATA, this->channels[k].topic_path, false);
 
             if (read_success)
             {
@@ -133,6 +150,29 @@ private:
                 {
                     Serial.println("The state have not changed.");
                 }
+            }
+        }
+    }
+
+    // Check connection interval and update if needed
+    static void check_connection_interval()
+    {
+        global_connection_update_interval = FLOKER_DATA.toInt();
+    }
+
+    // Handle the connection polling
+    void connection_polling_handle()
+    {
+        if (this->is_connected_polling && millis() - this->last_connection_update > global_connection_update_interval)
+        {
+            this->last_connection_update = millis();
+            this->write(this->connection_state_topic_path, "connected", false);
+
+            if (!this->static_information_pushed)
+            {
+                this->write(this->connection_type_topic_path, this->device_type, false);
+                this->write(this->connection_version_topic_path, FLOLIB_FLOKER_VERSION, false);
+                this->static_information_pushed = true;
             }
         }
     }
@@ -173,17 +213,57 @@ public:
         this->port = port;
     }
 
+    // Set connection polling update
+    void set_connection_polling(
+        String no_default_device_path = String(""),
+        String device_type = String(""),
+        String start_connection_path = DEFAULT_START_POLLING_PATH,
+        String state_connection_path = DEFAULT_STATE_POLLING_PATH,
+        String state_interval_path = DEFAULT_INTERVAL_POLLING_PATH,
+        String state_type_path = DEFAULT_TYPE_POLLING_PATH,
+        String state_version_path = DEFAULT_VERSION_POLLING_PATH)
+    {
+        this->is_connected_polling = true;
+
+        // Create base path
+        String base_path = start_connection_path;
+        if (no_default_device_path != String(""))
+            base_path += no_default_device_path;
+        else if (this->device_path != String(""))
+            base_path += this->device_path;
+
+        // State topic
+        this->connection_state_topic_path = base_path + state_connection_path;
+
+        // Interval topic
+        this->connection_interval_topic_path = base_path + state_interval_path;
+
+        // Device type topic
+        this->connection_type_topic_path = base_path + state_type_path;
+        if (device_type != String(""))
+            this->device_type = device_type;
+
+        // Version topic
+        this->connection_version_topic_path = base_path + state_version_path;
+
+        this->nb_channels++;
+    }
+
     // Start the WiFi connection
     void begin()
     {
-        // Init channels
-        this->alloc_channels_memory(this->nb_channels);
-
         // Init Serial
-        if (DEBUG_FLOKER_LIB && Serial)
+        if (DEBUG_FLOKER_LIB && !Serial)
         {
             Serial.begin(DEFAULT_SERIAL_BAUDRATE);
         }
+
+        // Init channels
+        this->alloc_channels_memory(this->nb_channels);
+
+        // Init connection polling channel
+        if (this->is_connected_polling)
+            this->subscribe(this->connection_interval_topic_path, check_connection_interval, false);
 
         // Init WiFi connection
         WiFi.begin(this->ssid, this->password);
@@ -210,40 +290,11 @@ public:
         }
     }
 
-    // Set connection polling update
-    void set_connection_polling(
-        unsigned long connection_update_interval,
-        String device_name,
-        String no_default_device_path = String(""),
-        String start_connection_path = DEFAULT_START_POLLING_PATH)
-    {
-        this->is_connected_polling = true;
-        this->connection_update_interval = connection_update_interval;
-        this->device_name = device_name;
-
-        // Create connection state topic
-        this->connection_state_topic_path = start_connection_path;
-        if (no_default_device_path != String(""))
-            this->connection_state_topic_path += no_default_device_path + String("/");
-        else if (this->device_path != String(""))
-            this->connection_state_topic_path += this->device_path + String("/");
-        this->connection_state_topic_path += this->device_name;
-    }
-
-    void connection_polling_handle()
-    {
-        if (this->is_connected_polling && millis() - this->last_connection_update > this->connection_update_interval)
-        {
-            this->last_connection_update = millis();
-            this->write(this->connection_state_topic_path, "connected", false);
-        }
-    }
-
     // Create channel callback function link
-    void subscribe(String topic_path, void (*function)())
+    void subscribe(String topic_path, void (*function)(), bool autocomplete_topic = true)
     {
         // Patern device path is set
-        if (this->device_path != String(""))
+        if (autocomplete_topic && this->device_path != String(""))
         {
             topic_path = DEFAULT_START_IOT_PATH + this->device_path + topic_path;
         }
@@ -255,9 +306,14 @@ public:
     }
 
     // Read a topic
-    bool read(int *http_code, String *get_data, String topic_path)
+    bool read(int *http_code, String *get_data, String topic_path, bool autocomplete_topic = true)
     {
         bool success = false;
+        // Patern device path is set
+        if (autocomplete_topic && this->device_path != String(""))
+        {
+            topic_path = DEFAULT_START_IOT_PATH + this->device_path + topic_path;
+        }
         String uri = make_uri(topic_path);
 
         // Opening the connection
