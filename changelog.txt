@@ -1,0 +1,9 @@
+"2.0.0"
+Restructuration class
+Mise en place d'un info polling (retour d'état de la connexion / type de carte utilisée)
+Possibilité de configurer un auto path qui vient compléter la path commun sur tous les topics
+"2.0.1"
+Ajout de l'info polling "version logiciel"
+Optimisation du polling (info static push une seule fois au début)
+"2.0.2"
+Ajout de l'info polling "IP"
