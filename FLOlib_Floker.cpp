@@ -3,7 +3,7 @@
 #define DEBUG_FLOKER_LIB false
 String FLOKER_DATA;
 
-#define FLOLIB_FLOKER_VERSION "2.0.1"
+#define FLOLIB_FLOKER_VERSION "2.0.2"
 
 // Device type detection call associated libraries
 #ifdef ESP8266_ENABLED
@@ -27,6 +27,7 @@ String FLOKER_DATA;
 #define DEFAULT_INTERVAL_POLLING_PATH "/interval"
 #define DEFAULT_TYPE_POLLING_PATH "/type"
 #define DEFAULT_VERSION_POLLING_PATH "/version"
+#define DEFAULT_IP_POLLING_PATH "/ip"
 
 #define DEFAULT_START_IOT_PATH "iot/"
 #define DEFAULT_SERIAL_BAUDRATE 9600
@@ -38,6 +39,7 @@ class Floker
 private:
     // Device
     String device_type = FLOKER_DEVICE_TYPE;
+    String ip;
 
     // WiFi
     const char *ssid;
@@ -78,6 +80,7 @@ private:
     String connection_interval_topic_path;
     String connection_type_topic_path;
     String connection_version_topic_path;
+    String connection_ip_topic_path;
 
     // Tools
     void alloc_channels_memory(unsigned short nb_channels)
@@ -172,6 +175,7 @@ private:
             {
                 this->write(this->connection_type_topic_path, this->device_type, false);
                 this->write(this->connection_version_topic_path, FLOLIB_FLOKER_VERSION, false);
+                this->write(this->connection_ip_topic_path, this->ip, false);
                 this->static_information_pushed = true;
             }
         }
@@ -221,7 +225,8 @@ public:
         String state_connection_path = DEFAULT_STATE_POLLING_PATH,
         String state_interval_path = DEFAULT_INTERVAL_POLLING_PATH,
         String state_type_path = DEFAULT_TYPE_POLLING_PATH,
-        String state_version_path = DEFAULT_VERSION_POLLING_PATH)
+        String state_version_path = DEFAULT_VERSION_POLLING_PATH,
+        String state_ip_path = DEFAULT_IP_POLLING_PATH)
     {
         this->is_connected_polling = true;
         
@@ -245,6 +250,9 @@ public:
         
         // Version topic
         this->connection_version_topic_path = base_path + state_version_path;
+
+        // IP
+        this->connection_ip_topic_path = base_path + state_ip_path;
 
         this->nb_channels++;
     }
@@ -282,11 +290,12 @@ public:
                 Serial.print(".");
             }
         }
+        this->ip = String(WiFi.localIP());
         if (DEBUG_FLOKER_LIB)
         {
             Serial.println("");
             Serial.print("Connection is established ! Your ip is: ");
-            Serial.println(WiFi.localIP());
+            Serial.println(this->ip);
         }
     }
 
