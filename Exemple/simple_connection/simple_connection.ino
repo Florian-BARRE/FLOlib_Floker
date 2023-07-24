@@ -10,7 +10,6 @@ Floker broker(
   /*your server ip or domain name*/,
   /*your root api path*/, 
   /*your token server access*/,
-  /*number of channel you will subscribe*/,
   /*Optionnal: your device path*/
 );
 
@@ -41,13 +40,13 @@ void setup() {
   // If you enable DEBUG_FLOKER_LIB, the Serial will be automatically started on 9600 baudrate
   broker.begin();
 
-  // You can enable connection polling 
+  // You can enable connection polling
   broker.set_connection_polling(
-    /*Refresh state interval in ms*/,
-    /*Device name (ESP8266 for exemple)*/,
-    /*Optional: device path if you don't want to use the one given in the constructor*/
-    /*Optional: the start path (default is 'iot/')*/
- );
+      /*Optional: Set custom path*/,
+      /*Optional: Device name (ESP8266 for exemple)*/,
+      /*Optional: device path if you don't want to use the one given in the constructor*/
+      /*Optional: the start path (default is 'iot/')*/
+  );
 
   // Subscribe to a channel
   // 2 cases

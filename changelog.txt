@@ -7,3 +7,7 @@ Ajout de l'info polling "version logiciel"
 Optimisation du polling (info static push une seule fois au début)
 "2.0.2"
 Ajout de l'info polling "IP"
+"2.1.0"
+Plus besoin de définir le nombre de channel à l'avance dans le constructeur, tout est automatiquement géré
+BaudRate mit à 115200 par défaut
+topic_path de type char* pour éviter la fragmentation de mémoire causée par les String

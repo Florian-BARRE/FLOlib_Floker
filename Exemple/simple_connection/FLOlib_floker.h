@@ -3,7 +3,7 @@
 #define DEBUG_FLOKER_LIB false
 String FLOKER_DATA;
 
-#define FLOLIB_FLOKER_VERSION "2.0.2"
+#define FLOLIB_FLOKER_VERSION "2.1.0"
 
 // Device type detection call associated libraries
 #ifdef ESP8266_ENABLED
@@ -30,7 +30,7 @@ String FLOKER_DATA;
 #define DEFAULT_IP_POLLING_PATH "/ip"
 
 #define DEFAULT_START_IOT_PATH "iot/"
-#define DEFAULT_SERIAL_BAUDRATE 9600
+#define DEFAULT_SERIAL_BAUDRATE 115200
 
 static unsigned long global_connection_update_interval = 10000;
 
@@ -59,14 +59,13 @@ private:
     // Channels variables
     typedef struct
     {
-        String topic_path;
+        char *topic_path;
         String state;
         void (*function)();
     } channel;
 
     channel *channels;
-    unsigned short nb_channels;
-    unsigned short channel_index = 0;
+    unsigned short nb_channels = 0;
 
     // Auto pathing device
     String device_name;
@@ -83,9 +82,61 @@ private:
     String connection_ip_topic_path;
 
     // Tools
-    void alloc_channels_memory(unsigned short nb_channels)
+    // Deep copy of a channel
+    channel deep_copy_channel(const channel &source)
     {
-        this->channels = (channel *)calloc(nb_channels, sizeof(channel));
+        channel copy;
+
+        copy.topic_path = strdup(source.topic_path); // Deep copy for char *
+        copy.state = source.state;
+        copy.function = source.function;
+
+        return copy;
+    }
+
+    // Fonction pour ajouter un élément vide au tableau
+    void add_channel_memory()
+    {
+        this->nb_channels++;
+
+        // If no element in the array
+        if (this->nb_channels - 1 == 0)
+        {
+            if (DEBUG_FLOKER_LIB)
+            {
+                Serial.println("\nSubscribe to a new channel, this is the first one !");
+                Serial.println("Let's alloc the memory.");
+            }
+
+            this->channels = (channel *)calloc(this->nb_channels, sizeof(channel));
+        }
+
+        else
+        {
+            if (DEBUG_FLOKER_LIB)
+            {
+                Serial.println("\nSubscribe to a new channel, this the seconde one or more !");
+                Serial.println("Let's alloc the memory.");
+            }
+
+            channel *new_channels = (channel *)calloc(this->nb_channels, sizeof(channel));
+
+            if (DEBUG_FLOKER_LIB)
+            {
+                Serial.println("New channels adress: " + String((unsigned long)new_channels));
+                Serial.println("Current channels adress: " + String((unsigned long)this->channels));
+            }
+
+            for (unsigned short k = 0; k < this->nb_channels - 1; k++)
+                new_channels[k] = deep_copy_channel(this->channels[k]);
+
+            free(this->channels);
+            this->channels = new_channels;
+
+            if (DEBUG_FLOKER_LIB)
+                Serial.println("The deep copy is done.");
+        }
+        Serial.println("The new current channels adress: " + String((unsigned long)this->channels));
     }
 
     // Making uri for request
@@ -115,9 +166,9 @@ private:
     }
 
     // Check all the channels
-    void check_all_channels()
+    void subscribed_channels_handle()
     {
-        for (byte k = 0; k < this->channel_index; k++)
+        for (byte k = 0; k < this->nb_channels; k++)
         {
             if (DEBUG_FLOKER_LIB)
             {
@@ -140,7 +191,7 @@ private:
                 }
 
                 // Check if the state have changed
-                if (this->channels[k].state != FLOKER_DATA)
+                if (String(this->channels[k].state) != FLOKER_DATA)
                 {
                     if (DEBUG_FLOKER_LIB)
                     {
@@ -166,7 +217,7 @@ private:
     // Handle the connection polling
     void connection_polling_handle()
     {
-        if (this->is_connected_polling && millis() - this->last_connection_update > global_connection_update_interval)
+        if (this->is_connected_polling && (millis() - this->last_connection_update > global_connection_update_interval || !this->static_information_pushed))
         {
             this->last_connection_update = millis();
             this->write(this->connection_state_topic_path, "connected", false);
@@ -190,7 +241,6 @@ public:
         String server,
         String root_path,
         String token,
-        unsigned short nb_channels,
         String device_path = String(""))
     {
         this->ssid = ssid;
@@ -198,16 +248,11 @@ public:
         this->request_type = secure_connection ? String(HTTPS_REQUEST) : String(HTTP_REQUEST);
         this->server = server;
         if (port == 0)
-        {
             this->port = secure_connection ? HTTPS_PORT : HTTP_PORT;
-        }
         else
-        {
             this->port = port;
-        }
         this->root_path = root_path;
         this->token = token;
-        this->nb_channels = nb_channels;
         this->device_path = device_path;
     }
 
@@ -253,8 +298,6 @@ public:
 
         // IP
         this->connection_ip_topic_path = base_path + state_ip_path;
-
-        this->nb_channels++;
     }
 
     // Start the WiFi connection
@@ -265,9 +308,6 @@ public:
         {
             Serial.begin(DEFAULT_SERIAL_BAUDRATE);
         }
-
-        // Init channels
-        this->alloc_channels_memory(this->nb_channels);
 
         // Init connection polling channel
         if (this->is_connected_polling)
@@ -290,7 +330,7 @@ public:
                 Serial.print(".");
             }
         }
-        this->ip = String(WiFi.localIP());
+        this->ip = WiFi.localIP().toString();
         if (DEBUG_FLOKER_LIB)
         {
             Serial.println("");
@@ -302,16 +342,17 @@ public:
     // Create channel callback function link
     void subscribe(String topic_path, void (*function)(), bool autocomplete_topic = true)
     {
+        this->add_channel_memory();
+
         // Patern device path is set
         if (autocomplete_topic && this->device_path != String(""))
         {
             topic_path = DEFAULT_START_IOT_PATH + this->device_path + topic_path;
         }
-        this->channels[this->channel_index] = channel{
-            topic_path,
+        this->channels[this->nb_channels - 1] = channel{
+            strdup(topic_path.c_str()),
             String("default value"),
             (*function)};
-        this->channel_index++;
     }
 
     // Read a topic
@@ -442,7 +483,7 @@ public:
         if (WiFi.status() == WL_CONNECTED)
         {
             connection_polling_handle();
-            check_all_channels();
+            subscribed_channels_handle();
         }
     }
 };
