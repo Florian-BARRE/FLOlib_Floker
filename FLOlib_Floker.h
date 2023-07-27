@@ -3,9 +3,10 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-#define DEBUG_FLOKER_LIB true
+#define FLOKER_DEBUG_MODE
+#define FLOKER_DEBUG_LEVEL 100
 
-#define FLOLIB_FLOKER_VERSION "3.0.0"
+#define FLOLIB_FLOKER_VERSION "3.0.1"
 
 #define HTTPS_REQUEST "https://"
 #define HTTP_REQUEST "http://"
@@ -218,5 +219,44 @@ public:
     bool read(String topic_path, String *get_data, bool autocomplete_topic = true, bool force_request = false);
     bool write(String topic_path, String data_to_write, bool autocomplete_topic = true, bool force_request = false);
     bool multi_tasks(DynamicJsonDocument request, DynamicJsonDocument *response, bool force_request = false);
+};
+#pragma endregion
+
+#pragma region Debug
+class Debug
+{
+public:
+    // Tools
+    static bool check_auth_to_print(word level = 1);
+    static String end_printed_function();
+
+    // Channel
+    static void channel_deep_copy(Channel *channel, word level = 1);
+
+    static void channel_push_channel_to_array_alloc_memory(Channel *channel, unsigned short new_size, word level = 1);
+    static void channel_push_channel_to_array_start_deep_copy(word level = 1);
+    static void channel_push_channel_to_array_end_deep_copy(word level = 1);
+    static void channel_push_channel_to_array_show_adress(Channel *old_ptr, Channel *new_ptr, word level = 1);
+
+    // Server
+    static void server_make_uri(String *topic, String *data_to_write, String *uri, word level = 1);
+
+    static void server_request_open_connection(String type, String *uri, word level = 1);
+    static void server_request_analyse_http_code(HTTPClient *client, int *code, String *reponse, word level = 1);
+    static void server_request_close_connection(String type, word level = 1);
+
+    static void server_begin_wifi_connection(String *ssid, word level = 1);
+    static void server_begin_wifi_connection_waiting(word level = 1);
+    static void server_begin_wifi_connection_done(String *ip, word level = 1);
+
+    static void server_request(String type, String *topic_path_or_request, String *data, bool *force, word level = 1);
+    /*
+    // Software polling
+    static void software_polling_handle(Software_polling *obj);
+    static void create_interval_channel(Channel *channel);
+
+    // Floker
+    static void floker_get_path(String *path, bool *autocomplete);
+    */
 };
 #pragma endregion

@@ -24,22 +24,14 @@ DynamicJsonDocument Json_tools::make_read_json(String topic)
 {
     DynamicJsonDocument json_params(256);
     json_params["parse"] = "state";
-    return make_under_request_json("read", topic, &json_params);
+    return make_task_json("read", topic, &json_params);
 }
 
 DynamicJsonDocument Json_tools::make_write_json(String topic, String state)
 {
     DynamicJsonDocument json_params(256);
     json_params["state"] = state;
-    return make_under_request_json("write", topic, &json_params);
-}
-
-void push_task_to_array(DynamicJsonDocument &array, DynamicJsonDocument task_to_add)
-{
-    if (array.memoryUsage() + task_to_add.memoryUsage() > array.capacity())
-        array.grow(task_to_add.memoryUsage());
-
-    array.add(task_to_add.as<JsonObject>());
+    return make_task_json("write", topic, &json_params);
 }
 
 #pragma endregion
@@ -56,53 +48,33 @@ Channel::Channel(String topic_path, void (*function)(String data), String state)
 // Static: Method(s)
 Channel Channel::deep_copy(Channel channel_to_copy)
 {
+    Debug::channel_deep_copy(&channel_to_copy);
     return Channel(channel_to_copy.topic_path, channel_to_copy.function, channel_to_copy.state);
 }
 
 Channel *Channel::push_channel_to_array(Channel *old_ptr, Channel channel_to_push, unsigned short new_size)
 {
     Channel *new_ptr;
+    Debug::channel_push_channel_to_array_alloc_memory(&channel_to_push, new_size);
 
     // If no element in the array
     if (new_size - 1 == 0)
-    {
-        if (DEBUG_FLOKER_LIB)
-        {
-            Serial.println("\nSubscribe to a new channel, this is the first one !");
-            Serial.println("Let's alloc the memory.");
-        }
-
         new_ptr = (Channel *)calloc(new_size, sizeof(Channel));
-    }
     else
     {
-        if (DEBUG_FLOKER_LIB)
-        {
-            Serial.println("\nSubscribe to a new channel, this the seconde one or more !");
-            Serial.println("Let's alloc the memory.");
-        }
-
         new_ptr = (Channel *)calloc(new_size, sizeof(Channel));
 
-        if (DEBUG_FLOKER_LIB)
-        {
-            Serial.println("New channels adress: " + String((unsigned long)new_ptr));
-            Serial.println("Current channels adress: " + String((unsigned long)old_ptr));
-        }
-
+        Debug::channel_push_channel_to_array_start_deep_copy();
         for (unsigned short k = 0; k < new_size - 1; k++)
             new_ptr[k] = Channel::deep_copy(old_ptr[k]);
 
         free(old_ptr);
-
-        if (DEBUG_FLOKER_LIB)
-            Serial.println("The deep copy is done.");
+        Debug::channel_push_channel_to_array_end_deep_copy();
     }
-    Serial.println("The new current channels adress: " + String((unsigned long)new_ptr));
+    Debug::channel_push_channel_to_array_show_adress(old_ptr, new_ptr);
 
     // Add the new channel to the new_ptr
     new_ptr[new_size - 1] = Channel::deep_copy(channel_to_push);
-
     return new_ptr;
 }
 #pragma endregion
@@ -159,16 +131,14 @@ String Server_Manager::make_uri(String topic, String data_to_write)
         uri += String("token=") + this->token;
         uri += String("&parse=response");
     }
-
+    Debug::server_make_uri(&topic, &data_to_write, &uri);
     return uri;
 }
 
 bool Server_Manager::get_request(String uri, String *response, bool force_request)
 {
     // Open the connection
-    if (DEBUG_FLOKER_LIB)
-        Serial.println("Open get request:\nuri: " + uri);
-
+    Debug::server_request_open_connection("GET", &uri);
     this->http_client.begin(this->wifi_client, uri);
 
     bool success = false;
@@ -179,18 +149,7 @@ bool Server_Manager::get_request(String uri, String *response, bool force_reques
 
         // Get the request response
         *response = this->http_client.getString();
-
-        if (DEBUG_FLOKER_LIB)
-        {
-            Serial.println("Response code: " + String(http_code));
-            if (http_code < 0)
-                Serial.println("The request can't be sent: " + String(this->http_client.errorToString(http_code)));
-            else if (http_code != 200)
-                Serial.println("The request was a failure !\nThe error response is :\n" + *response);
-            else
-                Serial.println("The request was a success, the data is: \n" + *response);
-        }
-
+        Debug::server_request_analyse_http_code(&this->http_client, &http_code, response);
         success = (http_code == 200);
 
         // Quit the loop is the force request option is not asked
@@ -199,9 +158,7 @@ bool Server_Manager::get_request(String uri, String *response, bool force_reques
     }
 
     // Close the connection
-    if (DEBUG_FLOKER_LIB)
-        Serial.println("End of the get request close the connection.");
-
+    Debug::server_request_close_connection("GET");
     this->http_client.end();
 
     return success;
@@ -210,9 +167,7 @@ bool Server_Manager::get_request(String uri, String *response, bool force_reques
 bool Server_Manager::post_request(String uri, String request, String *response, bool force_request)
 {
     // Open the connection
-    if (DEBUG_FLOKER_LIB)
-        Serial.println("Open post request:\nuri: " + uri);
-
+    Debug::server_request_open_connection("POST", &uri);
     this->http_client.begin(this->wifi_client, uri);
     this->http_client.addHeader("Content-Type", "application/json");
 
@@ -226,16 +181,7 @@ bool Server_Manager::post_request(String uri, String request, String *response, 
         // Get the request response
         *response = this->http_client.getString();
 
-        if (DEBUG_FLOKER_LIB)
-        {
-            Serial.println("Response code: " + String(http_code));
-            if (http_code < 0)
-                Serial.println("The request can't be sent: " + String(this->http_client.errorToString(http_code)));
-            else if (http_code != 200)
-                Serial.println("The request was a failure !\nThe error response is :\n" + *response);
-            else
-                Serial.println("The request was a success, the data is: \n" + *response);
-        }
+        Debug::server_request_analyse_http_code(&this->http_client, &http_code, response);
 
         success = (http_code == 200);
 
@@ -245,11 +191,8 @@ bool Server_Manager::post_request(String uri, String request, String *response, 
     }
 
     // Close the connection
-    if (DEBUG_FLOKER_LIB)
-        Serial.println("End of the post request close the connection.");
-
+    Debug::server_request_close_connection("POST");
     this->http_client.end();
-
     return success;
 }
 
@@ -258,28 +201,16 @@ void Server_Manager::begin()
 {
     // Init WiFi connection
     WiFi.begin(this->ssid, this->password);
-    if (DEBUG_FLOKER_LIB)
-    {
-        Serial.print("Try to connect to ");
-        Serial.println(this->ssid);
-        Serial.print("Connecting");
-    }
+    String str_ssid = String(this->ssid);
+    Debug::server_begin_wifi_connection(&str_ssid);
 
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(500);
-        if (DEBUG_FLOKER_LIB)
-        {
-            Serial.print(".");
-        }
+        Debug::server_begin_wifi_connection_waiting();
     }
     this->ip = WiFi.localIP().toString();
-    if (DEBUG_FLOKER_LIB)
-    {
-        Serial.println("");
-        Serial.print("Connection is established ! Your ip is: ");
-        Serial.println(this->ip);
-    }
+    Debug::server_begin_wifi_connection_done(&this->ip);
 }
 
 bool Server_Manager::read(String topic_path, String *get_data, bool force)
@@ -386,39 +317,37 @@ void Floker::classic_subscribed_channels_handle()
 {
     for (unsigned short k = 0; k < this->nb_channels; k++)
     {
-        if (DEBUG_FLOKER_LIB)
-        {
-            Serial.println();
-            Serial.print("Topic path: ");
-            Serial.println(this->channels_ptr[k].topic_path);
-        }
+        // if (FLOKER_DEBUG_MODE)
+        //{
+        //     Serial.println();
+        //     Serial.print("Topic path: ");
+        //     Serial.println(this->channels_ptr[k].topic_path);
+        // }
 
         String response;
 
         if (this->read(this->channels_ptr[k].topic_path, &response, false))
         {
-            if (DEBUG_FLOKER_LIB)
-            {
-                Serial.print("State ------> ");
-                Serial.println(response);
-                Serial.print("Old state --> ");
-                Serial.println(this->channels_ptr[k].state);
-            }
+            // if (FLOKER_DEBUG_MODE)
+            //{
+            //     Serial.print("State ------> ");
+            //    Serial.println(response);
+            //    Serial.print("Old state --> ");
+            //    Serial.println(this->channels_ptr[k].state);
+            //}
 
             // Check if the state have changed
             if (String(this->channels_ptr[k].state) != response)
             {
-                if (DEBUG_FLOKER_LIB)
-                {
-                    Serial.println("The state have changed, let's execute the callback function !");
-                }
+                // if (FLOKER_DEBUG_MODE)
+                // Serial.println("The state have changed, let's execute the callback function !");
+
                 this->channels_ptr[k].function(response);
                 this->channels_ptr[k].state = response;
             }
-            else if (DEBUG_FLOKER_LIB)
-            {
-                Serial.println("The state have not changed.");
-            }
+            // else if (FLOKER_DEBUG_MODE)
+
+            // Serial.println("The state have not changed.");
         }
     }
 }
@@ -443,25 +372,25 @@ void Floker::multi_subscribed_channels_handle()
         JsonArray json_response_array = json_response.as<JsonArray>();
         for (unsigned short k = 0; k < this->nb_channels; k++)
         {
-            if (DEBUG_FLOKER_LIB)
-                Serial.println("\nTopic path: " + String(this->channels_ptr[k].topic_path));
+            // if (FLOKER_DEBUG_MODE)
+            //    Serial.println("\nTopic path: " + String(this->channels_ptr[k].topic_path));
 
             JsonObject under_request_response = json_response_array[k];
             String state = under_request_response["data"].as<String>();
-            if (DEBUG_FLOKER_LIB)
-                Serial.println("State ------> " + String(state) + "\nOld state --> " + String(this->channels_ptr[k].state));
+            // if (FLOKER_DEBUG_MODE)
+            //    Serial.println("State ------> " + String(state) + "\nOld state --> " + String(this->channels_ptr[k].state));
 
             // Check if the state have changed
             if (this->channels_ptr[k].state != state)
             {
-                if (DEBUG_FLOKER_LIB)
-                    Serial.println("The state have changed, let's execute the callback function !");
+                // if (FLOKER_DEBUG_MODE)
+                //     Serial.println("The state have changed, let's execute the callback function !");
 
                 this->channels_ptr[k].function(state);
                 this->channels_ptr[k].state = state;
             }
-            else if (DEBUG_FLOKER_LIB)
-                Serial.println("The state have not changed.");
+            // else if (FLOKER_DEBUG_MODE)
+            //    Serial.println("The state have not changed.");
         }
     }
 
@@ -539,8 +468,8 @@ void Floker::set_connection_polling(
 void Floker::begin()
 {
     // Init Serial
-    if (DEBUG_FLOKER_LIB && !Serial)
-        Serial.begin(DEFAULT_SERIAL_BAUDRATE);
+    // if (DEBUG_FLOKER_LIB && !Serial)
+    //    Serial.begin(DEFAULT_SERIAL_BAUDRATE);
 
     // Init connection polling channel
     if (this->enable_software_polling)
@@ -597,10 +526,190 @@ bool Floker::multi_tasks(DynamicJsonDocument request, DynamicJsonDocument *respo
         // Get the deserialize request's response
         DeserializationError parse_error = deserializeJson(*response, str_response);
 
-        if (DEBUG_FLOKER_LIB && parse_error)
-            Serial.println("Parse response failed ! Error code: " + String(parse_error.c_str()));
+        // if (DEBUG_FLOKER_LIB && parse_error)
+        //    Serial.println("Parse response failed ! Error code: " + String(parse_error.c_str()));
     }
 
     return success;
+}
+#pragma endregion
+
+#pragma region Debug
+bool Debug::check_auth_to_print(word level)
+{
+    bool auth = false;
+#ifdef FLOKER_DEBUG_MODE
+    if (FLOKER_DEBUG_LEVEL >= level)
+        auth = true;
+#endif
+    return auth;
+}
+
+String Debug::end_printed_function()
+{
+    return String("#- End of function !");
+}
+
+// Channel
+void Debug::channel_deep_copy(Channel *channel, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "\n#- Channel deep copy called !\n";
+    msg += "#-- Topic path: " + channel->topic_path + "\n";
+    msg += "#-- State: " + channel->state;
+    msg += Debug::end_printed_function();
+
+    Serial.println(msg);
+}
+
+void Debug::channel_push_channel_to_array_alloc_memory(Channel *channel, unsigned short new_size, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "\n#- Push channel to array was called !\n";
+
+    msg += "#-- The channel topic is : " + channel->topic_path + "\n";
+
+    if (new_size - 1 == 0)
+        msg += "#-- This is the first channel of the array.\n";
+    else
+        msg += "#-- This is " + String(new_size) + " channel of the array.\n";
+
+    msg += "#--- Let's alloc the memory.";
+    Serial.println(msg);
+}
+
+void Debug::channel_push_channel_to_array_start_deep_copy(word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    Serial.println("#--- Start deep copy...");
+}
+
+void Debug::channel_push_channel_to_array_end_deep_copy(word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    Serial.println("#--- The deep copy is ended.");
+}
+
+void Debug::channel_push_channel_to_array_show_adress(Channel *old_ptr, Channel *new_ptr, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "#--- The old channels array adress is : " + String((unsigned long)old_ptr) + "\n";
+    msg += "#--- The new channels array adress is : " + String((unsigned long)new_ptr) + "\n";
+    msg += Debug::end_printed_function();
+    Serial.println(msg);
+}
+
+// Server
+void Debug::server_make_uri(String *topic, String *data_to_write, String *uri, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "\n#- Make URI called !\n";
+
+    if (*topic != String("") && *data_to_write != String(""))
+        msg += "#-- Create URI for 'write' request !\n";
+    else if (*topic != String(""))
+        msg += "#-- Create URI for 'read' request !\n";
+    else
+        msg += "#-- Create URI for 'multi' request !\n";
+
+    msg += "#--- URI result: " + *uri + "\n";
+    msg += Debug::end_printed_function();
+    Serial.println(msg);
+}
+
+void Debug::server_request_open_connection(String type, String *uri, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "\n#- Open a " + type + " connection...\n";
+    msg += "#-- URI: " + *uri + "\n";
+    Serial.println(msg);
+}
+
+void Debug::server_request_analyse_http_code(HTTPClient *client, int *code, String *reponse, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "\n#- Analyse HTTP code.\n";
+    msg += "#-- HTTP code: " + String(*code) + "\n";
+
+    if (*code == 200)
+        msg += "#-- The request was a success !\n";
+    else
+    {
+        msg += "#-- The request was a failure !\n";
+        msg += "#--- The error is : " + client->errorToString(*code) + "\n";
+    }
+    msg += "#-- The reponse is : " + *reponse + "\n";
+    Serial.println(msg);
+}
+
+void Debug::server_request_close_connection(String type, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "\n#- Close a " + type + " connection.\n";
+    msg += Debug::end_printed_function();
+    Serial.println(msg);
+}
+
+void Debug::server_begin_wifi_connection(String *ssid, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "\n#- Try to connect to" + *ssid + "\n";
+    Serial.println(msg);
+}
+
+void Debug::server_begin_wifi_connection_waiting(word level)
+{
+    Serial.print(".");
+}
+
+void Debug::server_begin_wifi_connection_done(String *ip, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "\n#- The WiFi connction is done !\n";
+    msg += "#-- The device ip is " + *ip + "\n";
+    msg += Debug::end_printed_function();
+    Serial.println(msg);
+}
+
+void Debug::server_request(String type, String *topic_path_or_request, String *data, bool *force, word level)
+{
+    if (!Debug::check_auth_to_print(level))
+        return;
+
+    String msg = "\n#- Open a " + type + " request.\n";
+
+    if (*force)
+        msg += "#-- The request is in force mode !\n";
+
+    msg += "#-- The concerned topic is " + *topic_path_or_request + "\n";
+    if (type == "write")
+        msg += "#-- The data to write is : " + *data + "\n";
+    else if (type == "multi")
+        msg += "#-- The request content is : " + *data + "\n";
+
+    msg += Debug::end_printed_function();
+    Serial.println(msg);
 }
 #pragma endregion

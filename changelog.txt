@@ -16,3 +16,5 @@ Multi request task, permet d'envoyer 1 requete pour faire plusoeurs actions, opt
 "3.0.0"
 Refonte en orienté objet du code. Possibilité de faire en handle des channels en multi task 
 donc en 1 seule requête. Performance largement augmentée.
+"3.0.1"
+Mise en place de la class Debug pour tous les prints
