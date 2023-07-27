@@ -11,3 +11,8 @@ Ajout de l'info polling "IP"
 Plus besoin de définir le nombre de channel à l'avance dans le constructeur, tout est automatiquement géré
 BaudRate mit à 115200 par défaut
 topic_path de type char* pour éviter la fragmentation de mémoire causée par les String
+"2.2.0"
+Multi request task, permet d'envoyer 1 requete pour faire plusoeurs actions, optimisation réseau
+"3.0.0"
+Refonte en orienté objet du code. Possibilité de faire en handle des channels en multi task 
+donc en 1 seule requête. Performance largement augmentée.

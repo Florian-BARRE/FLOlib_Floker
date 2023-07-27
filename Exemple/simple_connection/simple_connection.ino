@@ -1,5 +1,3 @@
-#define ESP8266_ENABLED true // Choose your device type
-#define ESP32_ENABLED false
 
 #include "FLOlib_floker.h" 
 
@@ -44,7 +42,7 @@ void setup() {
   broker.set_connection_polling(
       /*Optional: Set custom path*/,
       /*Optional: Device name (ESP8266 for exemple)*/,
-      /*Optional: device path if you don't want to use the one given in the constructor*/
+      /*Optional: device path if you don't want to use the one given in the constructor*/,
       /*Optional: the start path (default is 'iot/')*/
   );
 
